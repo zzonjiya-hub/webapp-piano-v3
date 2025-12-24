@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🎹 피아노</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #1a1a2e;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .fullscreen-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 100;
+            width: 44px;
+            height: 44px;
+            border: none;
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .fullscreen-btn:hover {
+            background: rgba(255,255,255,0.25);
+            transform: scale(1.05);
+        }
+
+        .fullscreen-btn:active {
+            transform: scale(0.95);
+        }
+
+        .fullscreen-btn svg {
+            width: 24px;
+            height: 24px;
+            fill: white;
+        }
+
+        .piano-wrapper {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .piano-container {
+            position: relative;
+            aspect-ratio: 16 / 9;
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        @media (min-aspect-ratio: 16/9) {
+            .piano-container {
+                height: 100%;
+                width: auto;
+            }
+        }
+
+        @media (max-aspect-ratio: 16/9) {
+            .piano-container {
+                width: 100%;
+                height: auto;
+            }
+        }
+
+        .piano-image {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .keys-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-rows: 1fr 1fr;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: repeat(16, 1fr);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .key-area {
+            position: relative;
+            cursor: pointer;
+            transition: background-color 0.05s;
+        }
+
+        .key-area.white-key {
+            background: transparent;
+            z-index: 1;
+        }
+
+        .key-area.black-key {
+            position: absolute;
+            width: 4%;
+            height: 63%;
+            top: 0;
+            transform: translateX(-50%);
+            z-index: 10;
+            background: transparent;
+            border-radius: 0 0 4px 4px;
+        }
+
+        .key-area.black-key.half-left {
+            width: 4%;
+            transform: translateX(50%);
+            left: 0 !important;
+        }
+
+        .key-area.black-key.half-right {
+            width: 4%;
+            transform: translateX(-150%);
+            left: 100% !important;
+        }
+
+        .key-area.active.white-key,
+        .key-area.active.black-key {
+            background: rgba(0, 0, 0, 0.2) !important;
+            -webkit-mask-image: 
+                linear-gradient(to bottom, transparent 0%, black 50%, black 90%, transparent 100%),
+                linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%);
+            -webkit-mask-composite: source-in;
+            mask-image: 
+                linear-gradient(to bottom, transparent 0%, black 50%, black 90%, transparent 100%),
+                linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%);
+            mask-composite: intersect;
+        }
+
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #1a1a2e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: opacity 0.5s ease;
+        }
+
+        .loading.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255,255,255,0.1);
+            border-top-color: #64b5f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .loading-text {
+            color: white;
+            margin-top: 20px;
+            font-size: 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">피아노 로딩 중...</div>
+    </div>
+
+    <div class="container">
+        <button class="fullscreen-btn" id="fullscreenBtn" title="전체화면">
+            <svg id="expandIcon" viewBox="0 0 24 24">
+                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+            </svg>
+            <svg id="compressIcon" viewBox="0 0 24 24" style="display:none;">
+                <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
+            </svg>
+        </button>
+
+        <div class="piano-wrapper">
+            <div class="piano-container" id="pianoContainer">
+                <img src="piano.jpg" alt="Piano" class="piano-image" id="pianoImage">
+                <div class="keys-overlay" id="keysOverlay">
+                    <div class="row" id="topRow"></div>
+                    <div class="row" id="bottomRow"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Web Audio API 설정
+        let audioContext = null;
+        const activeOscillators = new Map();
+        const activeGains = new Map();
+
+        // 음계 주파수 계산 (A4 = 440Hz 기준)
+        function getFrequency(note, octave) {
+            const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const noteIndex = notes.indexOf(note);
+            const a4Index = notes.indexOf('A');
+            const semitones = (octave - 4) * 12 + (noteIndex - a4Index);
+            return 440 * Math.pow(2, semitones / 12);
+        }
+
+        // 피아노 소리 생성
+        function playNote(note, octave) {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+
+            const noteKey = `${note}${octave}`;
+            
+            if (activeOscillators.has(noteKey)) {
+                stopNote(note, octave);
+            }
+
+            const frequency = getFrequency(note, octave);
+            
+            const osc1 = audioContext.createOscillator();
+            const osc2 = audioContext.createOscillator();
+            const osc3 = audioContext.createOscillator();
+            
+            osc1.type = 'triangle';
+            osc1.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(frequency * 2, audioContext.currentTime);
+            
+            osc3.type = 'sine';
+            osc3.frequency.setValueAtTime(frequency * 3, audioContext.currentTime);
+
+            const gainNode = audioContext.createGain();
+            const gain2 = audioContext.createGain();
+            const gain3 = audioContext.createGain();
+            
+            const now = audioContext.currentTime;
+            const attackTime = 0.01;
+            const decayTime = 0.2;
+            const sustainLevel = 0.3;
+            
+            const baseVolume = octave < 3 ? 0.4 : octave > 5 ? 0.25 : 0.35;
+            
+            gainNode.gain.setValueAtTime(0, now);
+            gainNode.gain.linearRampToValueAtTime(baseVolume, now + attackTime);
+            gainNode.gain.linearRampToValueAtTime(baseVolume * sustainLevel, now + attackTime + decayTime);
+            
+            gain2.gain.setValueAtTime(baseVolume * 0.15, now);
+            gain3.gain.setValueAtTime(baseVolume * 0.05, now);
+
+            const filter = audioContext.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(frequency * 6, now);
+            filter.Q.setValueAtTime(1, now);
+
+            osc1.connect(gainNode);
+            osc2.connect(gain2);
+            osc3.connect(gain3);
+            
+            gainNode.connect(filter);
+            gain2.connect(filter);
+            gain3.connect(filter);
+            
+            filter.connect(audioContext.destination);
+
+            osc1.start(now);
+            osc2.start(now);
+            osc3.start(now);
+
+            activeOscillators.set(noteKey, [osc1, osc2, osc3]);
+            activeGains.set(noteKey, [gainNode, gain2, gain3, filter]);
+        }
+
+        function stopNote(note, octave) {
+            const noteKey = `${note}${octave}`;
+            
+            if (activeGains.has(noteKey)) {
+                const gains = activeGains.get(noteKey);
+                const now = audioContext.currentTime;
+                
+                gains.forEach((node) => {
+                    if (node.gain) {
+                        node.gain.cancelScheduledValues(now);
+                        node.gain.setValueAtTime(node.gain.value, now);
+                        node.gain.linearRampToValueAtTime(0, now + 0.3);
+                    }
+                });
+                
+                activeGains.delete(noteKey);
+            }
+
+            if (activeOscillators.has(noteKey)) {
+                const oscillators = activeOscillators.get(noteKey);
+                
+                setTimeout(() => {
+                    oscillators.forEach(osc => {
+                        try { osc.stop(); } catch(e) {}
+                    });
+                }, 350);
+                
+                activeOscillators.delete(noteKey);
+            }
+        }
+
+        // 건반 배치 데이터
+        // 위쪽: B3, C4, D4, E4, F4, G4, A4, B4, C5, D5, E5, F5, G5, A5, B5, C6
+        const topRowNotes = [
+            {note: 'B', octave: 3},
+            {note: 'C', octave: 4}, {note: 'D', octave: 4}, {note: 'E', octave: 4},
+            {note: 'F', octave: 4}, {note: 'G', octave: 4}, {note: 'A', octave: 4}, {note: 'B', octave: 4},
+            {note: 'C', octave: 5}, {note: 'D', octave: 5}, {note: 'E', octave: 5},
+            {note: 'F', octave: 5}, {note: 'G', octave: 5}, {note: 'A', octave: 5}, {note: 'B', octave: 5},
+            {note: 'C', octave: 6}
+        ];
+
+        // 아래쪽: B1, C2, D2, E2, F2, G2, A2, B2, C3, D3, E3, F3, G3, A3, B3, C4
+        const bottomRowNotes = [
+            {note: 'B', octave: 1},
+            {note: 'C', octave: 2}, {note: 'D', octave: 2}, {note: 'E', octave: 2},
+            {note: 'F', octave: 2}, {note: 'G', octave: 2}, {note: 'A', octave: 2}, {note: 'B', octave: 2},
+            {note: 'C', octave: 3}, {note: 'D', octave: 3}, {note: 'E', octave: 3},
+            {note: 'F', octave: 3}, {note: 'G', octave: 3}, {note: 'A', octave: 3}, {note: 'B', octave: 3},
+            {note: 'C', octave: 4}
+        ];
+
+        // 검은건반 위치 계산
+        function getBlackKeys(whiteNotes) {
+            const blackKeys = [];
+            for (let i = 0; i < whiteNotes.length - 1; i++) {
+                const current = whiteNotes[i];
+                
+                // C->D: C#, D->E: D#, F->G: F#, G->A: G#, A->B: A#
+                if (current.note === 'C' || current.note === 'D' || 
+                    current.note === 'F' || current.note === 'G' || current.note === 'A') {
+                    blackKeys.push({
+                        note: current.note + '#',
+                        octave: current.octave,
+                        position: i + 1
+                    });
+                }
+            }
+            return blackKeys;
+        }
+
+        function createKeyboard() {
+            const topRow = document.getElementById('topRow');
+            const bottomRow = document.getElementById('bottomRow');
+            
+            topRow.innerHTML = '';
+            bottomRow.innerHTML = '';
+
+            function createWhiteKeys(row, notes) {
+                notes.forEach((noteData) => {
+                    const key = document.createElement('div');
+                    key.className = 'key-area white-key';
+                    key.dataset.note = noteData.note;
+                    key.dataset.octave = noteData.octave;
+                    row.appendChild(key);
+                });
+            }
+
+            function createBlackKeys(row, whiteNotes) {
+                const blackKeys = getBlackKeys(whiteNotes);
+                blackKeys.forEach((blackKey) => {
+                    const key = document.createElement('div');
+                    key.className = 'key-area black-key';
+                    key.dataset.note = blackKey.note;
+                    key.dataset.octave = blackKey.octave;
+                    key.style.left = `${(blackKey.position / 16) * 100}%`;
+                    row.appendChild(key);
+                });
+            }
+
+            // 양 끝 반쪽 검은건반 생성 함수
+            function createHalfBlackKeys(row, leftNote, leftOctave, rightNote, rightOctave) {
+                // 왼쪽 반쪽 검은건반
+                const leftKey = document.createElement('div');
+                leftKey.className = 'key-area black-key half-left';
+                leftKey.dataset.note = leftNote;
+                leftKey.dataset.octave = leftOctave;
+                leftKey.style.left = '0%';
+                leftKey.style.transform = 'translateX(-50%)';
+                row.appendChild(leftKey);
+
+                // 오른쪽 반쪽 검은건반
+                const rightKey = document.createElement('div');
+                rightKey.className = 'key-area black-key half-right';
+                rightKey.dataset.note = rightNote;
+                rightKey.dataset.octave = rightOctave;
+                rightKey.style.left = '100%';
+                rightKey.style.transform = 'translateX(-50%)';
+                row.appendChild(rightKey);
+            }
+
+            createWhiteKeys(topRow, topRowNotes);
+            createBlackKeys(topRow, topRowNotes);
+            createHalfBlackKeys(topRow, 'A#', 3, 'C#', 6); // 상단: A#3, C#6
+            
+            createWhiteKeys(bottomRow, bottomRowNotes);
+            createBlackKeys(bottomRow, bottomRowNotes);
+            createHalfBlackKeys(bottomRow, 'A#', 1, 'C#', 4); // 하단: A#1, C#4
+
+            addKeyEventListeners();
+        }
+
+        // 글리산도를 위한 터치 추적
+        const activeTouches = new Map(); // touchId -> {key, note, octave}
+
+        function getKeyAtPoint(x, y) {
+            const elements = document.elementsFromPoint(x, y);
+            // 검은건반 우선 (z-index가 높음)
+            for (const el of elements) {
+                if (el.classList.contains('black-key')) {
+                    return el;
+                }
+            }
+            for (const el of elements) {
+                if (el.classList.contains('white-key')) {
+                    return el;
+                }
+            }
+            return null;
+        }
+
+        // 모든 터치 포인트에서 건반 찾기 (멀티터치 화음용)
+        function getAllKeysAtPoints(touches) {
+            const keys = new Set();
+            for (const touch of touches) {
+                const key = getKeyAtPoint(touch.clientX, touch.clientY);
+                if (key) keys.add(key);
+            }
+            return keys;
+        }
+
+        function activateKey(key) {
+            if (!key) return;
+            const note = key.dataset.note;
+            const octave = parseInt(key.dataset.octave);
+            if (!key.classList.contains('active')) {
+                key.classList.add('active');
+                playNote(note, octave);
+            }
+        }
+
+        function deactivateKey(key) {
+            if (!key) return;
+            const note = key.dataset.note;
+            const octave = parseInt(key.dataset.octave);
+            if (key.classList.contains('active')) {
+                key.classList.remove('active');
+                stopNote(note, octave);
+            }
+        }
+
+        function handleTouchStart(e) {
+            e.preventDefault();
+            for (const touch of e.changedTouches) {
+                const key = getKeyAtPoint(touch.clientX, touch.clientY);
+                if (key) {
+                    activateKey(key);
+                    activeTouches.set(touch.identifier, {
+                        key: key,
+                        note: key.dataset.note,
+                        octave: parseInt(key.dataset.octave)
+                    });
+                }
+            }
+        }
+
+        function handleTouchMove(e) {
+            e.preventDefault();
+            for (const touch of e.changedTouches) {
+                const currentKey = getKeyAtPoint(touch.clientX, touch.clientY);
+                const touchData = activeTouches.get(touch.identifier);
+                
+                if (touchData && currentKey && currentKey !== touchData.key) {
+                    // 다른 터치가 같은 건반을 누르고 있는지 확인
+                    let otherTouchOnSameKey = false;
+                    for (const [id, data] of activeTouches) {
+                        if (id !== touch.identifier && data.key === touchData.key) {
+                            otherTouchOnSameKey = true;
+                            break;
+                        }
+                    }
+                    // 다른 터치가 없을 때만 비활성화
+                    if (!otherTouchOnSameKey) {
+                        deactivateKey(touchData.key);
+                    }
+                    // 새 건반 활성화
+                    activateKey(currentKey);
+                    // 터치 데이터 업데이트
+                    activeTouches.set(touch.identifier, {
+                        key: currentKey,
+                        note: currentKey.dataset.note,
+                        octave: parseInt(currentKey.dataset.octave)
+                    });
+                } else if (!touchData && currentKey) {
+                    // 새로운 터치가 건반 위로 들어옴
+                    activateKey(currentKey);
+                    activeTouches.set(touch.identifier, {
+                        key: currentKey,
+                        note: currentKey.dataset.note,
+                        octave: parseInt(currentKey.dataset.octave)
+                    });
+                } else if (touchData && !currentKey) {
+                    // 건반 영역을 벗어남
+                    let otherTouchOnSameKey = false;
+                    for (const [id, data] of activeTouches) {
+                        if (id !== touch.identifier && data.key === touchData.key) {
+                            otherTouchOnSameKey = true;
+                            break;
+                        }
+                    }
+                    if (!otherTouchOnSameKey) {
+                        deactivateKey(touchData.key);
+                    }
+                    activeTouches.delete(touch.identifier);
+                }
+            }
+        }
+
+        function handleTouchEnd(e) {
+            e.preventDefault();
+            for (const touch of e.changedTouches) {
+                const touchData = activeTouches.get(touch.identifier);
+                if (touchData) {
+                    // 다른 터치가 같은 건반을 누르고 있는지 확인
+                    let otherTouchOnSameKey = false;
+                    for (const [id, data] of activeTouches) {
+                        if (id !== touch.identifier && data.key === touchData.key) {
+                            otherTouchOnSameKey = true;
+                            break;
+                        }
+                    }
+                    // 다른 터치가 없을 때만 비활성화
+                    if (!otherTouchOnSameKey) {
+                        deactivateKey(touchData.key);
+                    }
+                    activeTouches.delete(touch.identifier);
+                }
+            }
+        }
+
+        function addKeyEventListeners() {
+            const keys = document.querySelectorAll('.key-area');
+            
+            // 마우스 이벤트 (글리산도 지원)
+            let isMouseDown = false;
+            let lastMouseKey = null;
+
+            // 마우스 상태 초기화 함수
+            function resetMouseState() {
+                if (lastMouseKey) {
+                    deactivateKey(lastMouseKey);
+                    lastMouseKey = null;
+                }
+                isMouseDown = false;
+            }
+
+            document.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return; // 좌클릭만 허용
+                isMouseDown = true;
+                const key = getKeyAtPoint(e.clientX, e.clientY);
+                if (key && key.classList.contains('key-area')) {
+                    activateKey(key);
+                    lastMouseKey = key;
+                }
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isMouseDown) return;
+                const key = getKeyAtPoint(e.clientX, e.clientY);
+                if (key && key.classList.contains('key-area') && key !== lastMouseKey) {
+                    if (lastMouseKey) {
+                        deactivateKey(lastMouseKey);
+                    }
+                    activateKey(key);
+                    lastMouseKey = key;
+                } else if (!key && lastMouseKey) {
+                    deactivateKey(lastMouseKey);
+                    lastMouseKey = null;
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                resetMouseState();
+            });
+
+            // 창 밖에서 마우스를 놓거나 포커스를 잃을 때 상태 초기화
+            window.addEventListener('mouseup', () => {
+                resetMouseState();
+            });
+
+            window.addEventListener('blur', () => {
+                resetMouseState();
+            });
+
+            document.addEventListener('mouseleave', () => {
+                resetMouseState();
+            });
+
+            // 전체화면 변경 시 상태 초기화
+            document.addEventListener('fullscreenchange', () => {
+                resetMouseState();
+            });
+
+            document.addEventListener('webkitfullscreenchange', () => {
+                resetMouseState();
+            });
+
+            // 마우스 우클릭 금지
+            document.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                return false;
+            });
+
+            // 터치 이벤트 (글리산도 & 멀티터치 화음 지원)
+            const overlay = document.getElementById('keysOverlay');
+            overlay.addEventListener('touchstart', handleTouchStart, { passive: false });
+            overlay.addEventListener('touchmove', handleTouchMove, { passive: false });
+            overlay.addEventListener('touchend', handleTouchEnd, { passive: false });
+            overlay.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+        }
+
+        // 전체화면 기능
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const expandIcon = document.getElementById('expandIcon');
+        const compressIcon = document.getElementById('compressIcon');
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                const elem = document.documentElement;
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen();
+                } else if (elem.webkitRequestFullscreen) {
+                    elem.webkitRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+            }
+        }
+
+        function updateFullscreenIcon() {
+            const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+            expandIcon.style.display = isFullscreen ? 'none' : 'block';
+            compressIcon.style.display = isFullscreen ? 'block' : 'none';
+        }
+
+        fullscreenBtn.addEventListener('click', toggleFullscreen);
+        document.addEventListener('fullscreenchange', updateFullscreenIcon);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
+
+        // 초기화
+        const pianoImage = document.getElementById('pianoImage');
+        const loading = document.getElementById('loading');
+
+        function initPiano() {
+            createKeyboard();
+            loading.classList.add('hidden');
+        }
+
+        if (pianoImage.complete) {
+            initPiano();
+        } else {
+            pianoImage.addEventListener('load', initPiano);
+        }
+
+        document.addEventListener('click', () => {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }, { once: true });
+
+        document.addEventListener('touchstart', () => {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }, { once: true });
+    </script>
+</body>
+</html>
